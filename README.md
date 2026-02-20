@@ -74,19 +74,40 @@ Software Bill of Materials (SBOM) für die Shop-Anwendung erstellen:
 # Zum Projekt-Root navigieren
 cd c:\Users\tse\source\repos\DepdendencyTrack
 
-# SBOM-Script ausführen
+# Dependency-Track API Key setzen (aus der DTrack UI)
+$env:DTRACK_API_KEY="ihr-api-key"
+
+# Optional: Defaults ueberschreiben
+$env:DTRACK_URL="http://localhost:8081"
+$env:DTRACK_PROJECT_VERSION="1.0.0"
+$env:DTRACK_BACKEND_PROJECT_NAME="Shop-Backend"
+$env:DTRACK_FRONTEND_PROJECT_NAME="Shop-Frontend"
+
+# SBOM generieren + automatisch zu Dependency-Track hochladen
 .\.github\workflows\sbom-local.ps1
 ```
 
 **Ergebnis**: 
-- `sbom/backend-sbom.json`
+- `sbom/backend-sbom.xml`
 - `sbom/frontend-sbom.json`
 
-#### Optional: SBOM zu Dependency-Track hochladen
+Die SBOMs werden danach direkt an Dependency-Track (`/api/v1/bom`) hochgeladen.
+
+#### Alternative mit `.env`
 
 ```powershell
-# API-Key aus Dependency-Track holen (siehe DependencyTrack-Setup/README.md)
-.\.github\workflows\sbom-local.ps1 -UploadToDTrack -DTrackApiKey "ihr-api-key"
+# Einmalig .env aus Template erstellen
+Copy-Item .env.example .env
+
+# Werte in .env anpassen (mindestens DTRACK_API_KEY), dann in Session laden
+Get-Content .env | ForEach-Object {
+   if ($_ -match '^[ ]*([^#=]+)[ ]*=[ ]*(.*)$') {
+      [Environment]::SetEnvironmentVariable($matches[1].Trim(), $matches[2].Trim(), 'Process')
+   }
+}
+
+# Script ausführen
+.\.github\workflows\sbom-local.ps1
 ```
 
 📖 Vollständige Anleitung: [DependencyTrack-Setup/SBOM-README.md](DependencyTrack-Setup/SBOM-README.md)

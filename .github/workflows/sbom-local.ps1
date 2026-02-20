@@ -172,6 +172,91 @@ if ($backendSbomExists -and $frontendSbomExists) {
     Write-Host "Einige SBOM-Dateien konnten nicht erstellt werden." -ForegroundColor Yellow
 }
 
+# Upload zu Dependency-Track
+Write-Host "" 
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "Dependency-Track Upload" -ForegroundColor Cyan
+Write-Host "========================================" -ForegroundColor Cyan
+
+$dependencyTrackUrl = if ($env:DTRACK_URL) { $env:DTRACK_URL.TrimEnd('/') } else { "http://localhost:8081" }
+$dependencyTrackApiKey = "odt_gtZWN1RP_djZkrWdl0ukPlRZi1rrGjH1gKNnKmCLE"
+$projectVersion = if ($env:DTRACK_PROJECT_VERSION) { $env:DTRACK_PROJECT_VERSION } else { "1.0.0" }
+$backendProjectName = if ($env:DTRACK_BACKEND_PROJECT_NAME) { $env:DTRACK_BACKEND_PROJECT_NAME } else { "Shop-Backend" }
+$frontendProjectName = if ($env:DTRACK_FRONTEND_PROJECT_NAME) { $env:DTRACK_FRONTEND_PROJECT_NAME } else { "Shop-Frontend" }
+
+function Upload-SbomToDependencyTrack {
+    param(
+        [Parameter(Mandatory = $true)][string]$FilePath,
+        [Parameter(Mandatory = $true)][string]$ProjectName,
+        [Parameter(Mandatory = $true)][string]$ProjectVersion,
+        [Parameter(Mandatory = $true)][string]$DependencyTrackUrl,
+        [Parameter(Mandatory = $true)][string]$ApiKey
+    )
+
+    if (-not (Test-Path $FilePath)) {
+        Write-Host "SBOM-Datei nicht gefunden: $FilePath" -ForegroundColor Red
+        return $false
+    }
+
+    try {
+        $bomBytes = [System.IO.File]::ReadAllBytes($FilePath)
+        $bomBase64 = [System.Convert]::ToBase64String($bomBytes)
+
+        $payload = @{
+            autoCreate = $true
+            projectName = $ProjectName
+            projectVersion = $ProjectVersion
+            bom = $bomBase64
+        } | ConvertTo-Json -Depth 5
+
+        $headers = @{
+            "X-Api-Key" = $ApiKey
+        }
+
+        $response = Invoke-RestMethod -Method Put -Uri "$DependencyTrackUrl/api/v1/bom" -Headers $headers -ContentType "application/json" -Body $payload
+
+        if ($response.token) {
+            Write-Host "Upload erfolgreich fuer '$ProjectName' (Token: $($response.token))" -ForegroundColor Green
+        } else {
+            Write-Host "Upload erfolgreich fuer '$ProjectName'" -ForegroundColor Green
+        }
+        return $true
+    }
+    catch {
+        Write-Host "Upload fehlgeschlagen fuer '$ProjectName': $($_.Exception.Message)" -ForegroundColor Red
+        return $false
+    }
+}
+
+if ([string]::IsNullOrWhiteSpace($dependencyTrackApiKey)) {
+    Write-Host "Kein API Key gefunden. Setzen Sie DTRACK_API_KEY, um Uploads zu aktivieren." -ForegroundColor Yellow
+    Write-Host "Dependency-Track URL: $dependencyTrackUrl" -ForegroundColor Gray
+} else {
+    Write-Host "Dependency-Track URL: $dependencyTrackUrl" -ForegroundColor White
+    Write-Host "Lade SBOM-Dateien hoch..." -ForegroundColor Yellow
+
+    $uploadBackendOk = $false
+    $uploadFrontendOk = $false
+
+    if ($backendSbomExists) {
+        $uploadBackendOk = Upload-SbomToDependencyTrack -FilePath (Join-Path $sbomPath "backend-sbom.xml") -ProjectName $backendProjectName -ProjectVersion $projectVersion -DependencyTrackUrl $dependencyTrackUrl -ApiKey $dependencyTrackApiKey
+    } else {
+        Write-Host "Backend SBOM fehlt, Upload uebersprungen." -ForegroundColor Yellow
+    }
+
+    if ($frontendSbomExists) {
+        $uploadFrontendOk = Upload-SbomToDependencyTrack -FilePath (Join-Path $sbomPath "frontend-sbom.json") -ProjectName $frontendProjectName -ProjectVersion $projectVersion -DependencyTrackUrl $dependencyTrackUrl -ApiKey $dependencyTrackApiKey
+    } else {
+        Write-Host "Frontend SBOM fehlt, Upload uebersprungen." -ForegroundColor Yellow
+    }
+
+    if (($backendSbomExists -and -not $uploadBackendOk) -or ($frontendSbomExists -and -not $uploadFrontendOk)) {
+        Write-Host "Mindestens ein Upload ist fehlgeschlagen." -ForegroundColor Yellow
+    } elseif ($backendSbomExists -or $frontendSbomExists) {
+        Write-Host "Alle verfuegbaren SBOM-Dateien wurden hochgeladen." -ForegroundColor Green
+    }
+}
+
 Set-Location $startLocation
 
 Write-Host ""
