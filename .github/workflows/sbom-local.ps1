@@ -64,12 +64,29 @@ Set-Location $rootPath
 
 dotnet CycloneDX $backendProject -o $sbomPath
 
+# Zeige erstellte Dateien
+Write-Host "  → Erstellte Dateien im SBOM-Verzeichnis:" -ForegroundColor Cyan
+Get-ChildItem $sbomPath | ForEach-Object { Write-Host "     - $($_.Name)" -ForegroundColor Gray }
+
 # Umbenennen von bom.json zu backend-sbom.json
 $bomFile = Join-Path $sbomPath "bom.json"
+$shopApiBomFile = Join-Path $sbomPath "ShopAPI.bom.json"
 $backendSbomFile = Join-Path $sbomPath "backend-sbom.json"
 
 if (Test-Path $bomFile) {
     Move-Item -Path $bomFile -Destination $backendSbomFile -Force
+    Write-Host "  → Umbenannt: bom.json -> backend-sbom.json" -ForegroundColor Cyan
+} elseif (Test-Path $shopApiBomFile) {
+    Move-Item -Path $shopApiBomFile -Destination $backendSbomFile -Force
+    Write-Host "  → Umbenannt: ShopAPI.bom.json -> backend-sbom.json" -ForegroundColor Cyan
+} else {
+    # Suche nach einer beliebigen .json Datei
+    $jsonFiles = Get-ChildItem -Path $sbomPath -Filter "*.json"
+    if ($jsonFiles.Count -gt 0) {
+        $firstJson = $jsonFiles[0]
+        Move-Item -Path $firstJson.FullName -Destination $backendSbomFile -Force
+        Write-Host "  → Umbenannt: $($firstJson.Name) -> backend-sbom.json" -ForegroundColor Cyan
+    }
 }
 
 if ($LASTEXITCODE -eq 0 -and (Test-Path $backendSbomFile)) {
@@ -133,6 +150,8 @@ Set-Location $frontendPath
 $frontendSbomPath = Join-Path $sbomPath "frontend-sbom.json"
 npx @cyclonedx/cyclonedx-npm --output-file $frontendSbomPath --output-format json
 
+Write-Host "  → Prüfe ob Datei erstellt wurde..." -ForegroundColor Cyan
+
 if ($LASTEXITCODE -eq 0 -and (Test-Path $frontendSbomPath)) {
     Write-Host "✓ Frontend SBOM erstellt: frontend-sbom.json" -ForegroundColor Green
     $frontendJson = Get-Content $frontendSbomPath | ConvertFrom-Json
@@ -140,6 +159,9 @@ if ($LASTEXITCODE -eq 0 -and (Test-Path $frontendSbomPath)) {
     Write-Host "  → $frontendComponents Komponenten gefunden" -ForegroundColor Cyan
 } else {
     Write-Host "❌ Frontend SBOM Generierung fehlgeschlagen" -ForegroundColor Red
+    if (-not (Test-Path $frontendSbomPath)) {
+        Write-Host "  → Datei wurde nicht erstellt: $frontendSbomPath" -ForegroundColor Red
+    }
 }
 
 # ========================================

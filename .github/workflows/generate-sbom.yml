@@ -37,9 +37,25 @@ jobs:
         run: |
           mkdir -p sbom
           dotnet CycloneDX Shop/Backend/ShopAPI.csproj -o ./sbom
-          # Rename to backend-sbom.json
+          echo "Files in sbom directory:"
+          ls -la sbom/
+          # Find and rename the generated file to backend-sbom.json
           if [ -f sbom/bom.json ]; then
             mv sbom/bom.json sbom/backend-sbom.json
+            echo "Renamed bom.json to backend-sbom.json"
+          elif [ -f sbom/ShopAPI.bom.json ]; then
+            mv sbom/ShopAPI.bom.json sbom/backend-sbom.json
+            echo "Renamed ShopAPI.bom.json to backend-sbom.json"
+          else
+            # Find any .json file and rename it
+            JSONFILE=$(find sbom -name "*.json" -type f | head -n 1)
+            if [ -n "$JSONFILE" ]; then
+              mv "$JSONFILE" sbom/backend-sbom.json
+              echo "Renamed $(basename $JSONFILE) to backend-sbom.json"
+            else
+              echo "Error: No JSON file found in sbom directory"
+              exit 1
+            fi
           fi
         continue-on-error: false
       
@@ -63,6 +79,13 @@ jobs:
         run: |
           mkdir -p ../../sbom
           cyclonedx-npm --output-file ../../sbom/frontend-sbom.json --output-format json
+          echo "Files in sbom directory after frontend generation:"
+          ls -la ../../sbom/
+          # Verify the file was created
+          if [ ! -f ../../sbom/frontend-sbom.json ]; then
+            echo "Error: frontend-sbom.json was not created"
+            exit 1
+          fi
       
       # ========================================
       # SBOM Validation & Info
