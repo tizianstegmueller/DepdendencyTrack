@@ -35,10 +35,12 @@ jobs:
       
       - name: Generate Backend SBOM
         run: |
-          dotnet CycloneDX Shop/Backend/ShopAPI.csproj \
-            -o ./sbom \
-            -f backend-sbom.json \
-            --json
+          mkdir -p sbom
+          dotnet CycloneDX Shop/Backend/ShopAPI.csproj -o ./sbom -j
+          # Rename to backend-sbom.json
+          if [ -f sbom/bom.json ]; then
+            mv sbom/bom.json sbom/backend-sbom.json
+          fi
         continue-on-error: false
       
       # ========================================
@@ -59,9 +61,8 @@ jobs:
       - name: Generate Frontend SBOM
         working-directory: ./Shop/Frontend
         run: |
-          cyclonedx-npm --output-file ../sbom/frontend-sbom.json \
-            --output-format json \
-            --spec-version 1.5
+          mkdir -p ../../sbom
+          cyclonedx-npm --output-file ../../sbom/frontend-sbom.json --output-format json
       
       # ========================================
       # SBOM Validation & Info

@@ -62,14 +62,19 @@ $backendProject = Join-Path $rootPath "Shop\Backend\ShopAPI.csproj"
 Write-Host "→ Generiere Backend SBOM..." -ForegroundColor Yellow
 Set-Location $rootPath
 
-dotnet CycloneDX $backendProject `
-    -o $sbomPath `
-    -f backend-sbom.json `
-    --json
+dotnet CycloneDX $backendProject -o $sbomPath -j
 
-if ($LASTEXITCODE -eq 0 -and (Test-Path (Join-Path $sbomPath "backend-sbom.json"))) {
+# Umbenennen von bom.json zu backend-sbom.json
+$bomFile = Join-Path $sbomPath "bom.json"
+$backendSbomFile = Join-Path $sbomPath "backend-sbom.json"
+
+if (Test-Path $bomFile) {
+    Move-Item -Path $bomFile -Destination $backendSbomFile -Force
+}
+
+if ($LASTEXITCODE -eq 0 -and (Test-Path $backendSbomFile)) {
     Write-Host "✓ Backend SBOM erstellt: backend-sbom.json" -ForegroundColor Green
-    $backendJson = Get-Content (Join-Path $sbomPath "backend-sbom.json") | ConvertFrom-Json
+    $backendJson = Get-Content $backendSbomFile | ConvertFrom-Json
     $backendComponents = $backendJson.components.Count
     Write-Host "  → $backendComponents Komponenten gefunden" -ForegroundColor Cyan
 } else {
@@ -126,7 +131,7 @@ Write-Host "→ Generiere Frontend SBOM..." -ForegroundColor Yellow
 Set-Location $frontendPath
 
 $frontendSbomPath = Join-Path $sbomPath "frontend-sbom.json"
-npx @cyclonedx/cyclonedx-npm --output-file $frontendSbomPath --output-format json --spec-version 1.5
+npx @cyclonedx/cyclonedx-npm --output-file $frontendSbomPath --output-format json
 
 if ($LASTEXITCODE -eq 0 -and (Test-Path $frontendSbomPath)) {
     Write-Host "✓ Frontend SBOM erstellt: frontend-sbom.json" -ForegroundColor Green
