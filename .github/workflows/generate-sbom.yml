@@ -1,0 +1,170 @@
+name: Generate SBOM
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+  workflow_dispatch:  # Ermöglicht manuellen Start
+  schedule:
+    # Täglich um 2:00 Uhr UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  generate-sbom:
+    name: Generate SBOM for Frontend and Backend
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      
+      # ========================================
+      # Backend SBOM (.NET)
+      # ========================================
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+      
+      - name: Restore Backend Dependencies
+        run: dotnet restore Shop/Backend/ShopAPI.csproj
+      
+      - name: Install CycloneDX for .NET
+        run: dotnet tool install --global CycloneDX
+      
+      - name: Generate Backend SBOM
+        run: |
+          dotnet CycloneDX Shop/Backend/ShopAPI.csproj \
+            -o ./sbom \
+            -f backend-sbom.json \
+            --json
+        continue-on-error: false
+      
+      # ========================================
+      # Frontend SBOM (React/Node.js)
+      # ========================================
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install Frontend Dependencies
+        working-directory: ./Shop/Frontend
+        run: npm ci
+      
+      - name: Install CycloneDX for NPM
+        run: npm install -g @cyclonedx/cyclonedx-npm
+      
+      - name: Generate Frontend SBOM
+        working-directory: ./Shop/Frontend
+        run: |
+          cyclonedx-npm --output-file ../sbom/frontend-sbom.json \
+            --output-format json \
+            --spec-version 1.5
+      
+      # ========================================
+      # SBOM Validation & Info
+      # ========================================
+      - name: Display SBOM Information
+        run: |
+          echo "========================================="
+          echo "Generated SBOM Files:"
+          echo "========================================="
+          ls -lh sbom/
+          echo ""
+          echo "Backend SBOM Components:"
+          jq '.components | length' sbom/backend-sbom.json || echo "Error reading backend SBOM"
+          echo ""
+          echo "Frontend SBOM Components:"
+          jq '.components | length' sbom/frontend-sbom.json || echo "Error reading frontend SBOM"
+      
+      # ========================================
+      # Upload SBOM as Artifacts
+      # ========================================
+      - name: Upload Backend SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-sbom
+          path: sbom/backend-sbom.json
+          retention-days: 90
+      
+      - name: Upload Frontend SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-sbom
+          path: sbom/frontend-sbom.json
+          retention-days: 90
+      
+      - name: Upload All SBOMs
+        uses: actions/upload-artifact@v4
+        with:
+          name: all-sboms
+          path: sbom/*.json
+          retention-days: 90
+      
+      # ========================================
+      # Optional: Upload to Dependency-Track
+      # ========================================
+      # Aktivieren Sie dies, wenn Dependency-Track läuft
+      # und setzen Sie die Secrets in GitHub
+      
+      - name: Upload Backend SBOM to Dependency-Track
+        if: false  # Auf 'true' setzen zum Aktivieren
+        env:
+          DTRACK_URL: ${{ secrets.DTRACK_URL || 'http://localhost:8081' }}
+          DTRACK_API_KEY: ${{ secrets.DTRACK_API_KEY }}
+        run: |
+          curl -X "POST" "${DTRACK_URL}/api/v1/bom" \
+            -H "Content-Type: multipart/form-data" \
+            -H "X-Api-Key: ${DTRACK_API_KEY}" \
+            -F "autoCreate=true" \
+            -F "projectName=Shop-Backend" \
+            -F "projectVersion=1.0.0" \
+            -F "bom=@sbom/backend-sbom.json"
+      
+      - name: Upload Frontend SBOM to Dependency-Track
+        if: false  # Auf 'true' setzen zum Aktivieren
+        env:
+          DTRACK_URL: ${{ secrets.DTRACK_URL || 'http://localhost:8081' }}
+          DTRACK_API_KEY: ${{ secrets.DTRACK_API_KEY }}
+        run: |
+          curl -X "POST" "${DTRACK_URL}/api/v1/bom" \
+            -H "Content-Type: multipart/form-data" \
+            -H "X-Api-Key: ${DTRACK_API_KEY}" \
+            -F "autoCreate=true" \
+            -F "projectName=Shop-Frontend" \
+            -F "projectVersion=1.0.0" \
+            -F "bom=@sbom/frontend-sbom.json"
+      
+      # ========================================
+      # Summary
+      # ========================================
+      - name: Create Job Summary
+        if: always()
+        run: |
+          echo "# SBOM Generation Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Generated Files" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | SBOM File | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f sbom/backend-sbom.json ]; then
+            BACKEND_COMPONENTS=$(jq '.components | length' sbom/backend-sbom.json)
+            echo "| Backend (.NET) | backend-sbom.json | ✅ $BACKEND_COMPONENTS components |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Backend (.NET) | backend-sbom.json | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ -f sbom/frontend-sbom.json ]; then
+            FRONTEND_COMPONENTS=$(jq '.components | length' sbom/frontend-sbom.json)
+            echo "| Frontend (React) | frontend-sbom.json | ✅ $FRONTEND_COMPONENTS components |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Frontend (React) | frontend-sbom.json | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Download" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Die SBOM-Dateien sind als Artifacts verfügbar und können heruntergeladen werden." >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,128 @@
+#####################################################
+# Dependency-Track Docker Compose
+# 
+# Dieses Docker Compose File startet:
+#   - Dependency-Track API Server (Port 8081)
+#   - Dependency-Track Frontend (Port 8080)
+#####################################################
+
+version: '3.8'
+
+volumes:
+  dependency-track:
+    name: dependency-track
+
+services:
+  dtrack-apiserver:
+    image: dependencytrack/apiserver:latest
+    container_name: dtrack-apiserver
+    environment:
+      # Konfiguration für die Dependency-Track API
+      # Vollständige Liste: https://docs.dependencytrack.org/getting-started/configuration/
+      
+      # System Requirements Check (kann deaktiviert werden bei weniger Ressourcen)
+      - SYSTEM_REQUIREMENT_CHECK_ENABLED=true
+      
+      # Logging
+      - LOGGING_LEVEL=INFO
+      
+      # Optional: Database Properties (Standard: H2 InMemory)
+      # Für Production empfiehlt sich PostgreSQL oder MySQL
+      # - ALPINE_DATABASE_MODE=external
+      # - ALPINE_DATABASE_URL=jdbc:postgresql://postgres:5432/dtrack
+      # - ALPINE_DATABASE_DRIVER=org.postgresql.Driver
+      # - ALPINE_DATABASE_USERNAME=dtrack
+      # - ALPINE_DATABASE_PASSWORD=changeme
+      # - ALPINE_DATABASE_POOL_ENABLED=true
+      # - ALPINE_DATABASE_POOL_MAX_SIZE=20
+      # - ALPINE_DATABASE_POOL_MIN_IDLE=10
+      
+      # Optional: CORS Configuration
+      # - ALPINE_CORS_ENABLED=true
+      # - ALPINE_CORS_ALLOW_ORIGIN=*
+      # - ALPINE_CORS_ALLOW_METHODS=GET, POST, PUT, DELETE, OPTIONS
+      
+      # Optional: Metrics
+      # - ALPINE_METRICS_ENABLED=true
+      
+      # Optional: HTTP Proxy
+      # - ALPINE_HTTP_PROXY_ADDRESS=proxy.example.com
+      # - ALPINE_HTTP_PROXY_PORT=8888
+    
+    deploy:
+      resources:
+        limits:
+          memory: 12288m
+        reservations:
+          memory: 8192m
+      restart_policy:
+        condition: on-failure
+    
+    ports:
+      - '8081:8080'
+    
+    volumes:
+      - 'dependency-track:/data'
+    
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/api/version"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+
+  dtrack-frontend:
+    image: dependencytrack/frontend:latest
+    container_name: dtrack-frontend
+    depends_on:
+      - dtrack-apiserver
+    
+    environment:
+      # WICHTIG: Diese URL muss vom Browser des Benutzers erreichbar sein
+      # Bei Verwendung auf einem dedizierten Server, verwenden Sie die externe IP/Domain
+      - API_BASE_URL=http://localhost:8081
+      
+      # Optional: OpenID Connect (OIDC) Configuration
+      # - OIDC_ISSUER=https://auth.example.com/auth/realms/example
+      # - OIDC_CLIENT_ID=
+      # - OIDC_SCOPE=openid profile email
+      # - OIDC_FLOW=implicit
+      # - OIDC_LOGIN_BUTTON_TEXT=Login with SSO
+    
+    ports:
+      - "8080:8080"
+    
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Optional: PostgreSQL Database (empfohlen für Production)
+  # Entkommentieren Sie diesen Service und konfigurieren Sie die 
+  # Datenbankumgebungsvariablen im dtrack-apiserver Service
+  #
+  # postgres:
+  #   image: postgres:16-alpine
+  #   container_name: dtrack-postgres
+  #   environment:
+  #     - POSTGRES_DB=dtrack
+  #     - POSTGRES_USER=dtrack
+  #     - POSTGRES_PASSWORD=changeme
+  #   volumes:
+  #     - postgres-data:/var/lib/postgresql/data
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U dtrack"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+
+# volumes:
+#   postgres-data:
+#     name: dtrack-postgres-data
