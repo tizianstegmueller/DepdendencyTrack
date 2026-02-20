@@ -39,23 +39,18 @@ jobs:
           dotnet CycloneDX Shop/Backend/ShopAPI.csproj -o ./sbom
           echo "Files in sbom directory:"
           ls -la sbom/
-          # Find and rename the generated file to backend-sbom.json
-          if [ -f sbom/bom.json ]; then
-            mv sbom/bom.json sbom/backend-sbom.json
-            echo "Renamed bom.json to backend-sbom.json"
-          elif [ -f sbom/ShopAPI.bom.json ]; then
-            mv sbom/ShopAPI.bom.json sbom/backend-sbom.json
-            echo "Renamed ShopAPI.bom.json to backend-sbom.json"
+          # Find and rename the generated file to backend-sbom.xml
+          if [ -f sbom/bom.xml ]; then
+            mv sbom/bom.xml sbom/backend-sbom.xml
+            echo "Renamed bom.xml to backend-sbom.xml"
+          elif [ -f sbom/ShopAPI.bom.xml ]; then
+            mv sbom/ShopAPI.bom.xml sbom/backend-sbom.xml
+            echo "Renamed ShopAPI.bom.xml to backend-sbom.xml"
           else
-            # Find any .json file and rename it
-            JSONFILE=$(find sbom -name "*.json" -type f | head -n 1)
-            if [ -n "$JSONFILE" ]; then
-              mv "$JSONFILE" sbom/backend-sbom.json
-              echo "Renamed $(basename $JSONFILE) to backend-sbom.json"
-            else
-              echo "Error: No JSON file found in sbom directory"
-              exit 1
-            fi
+            echo "Error: No backend XML BOM file found in sbom directory"
+            echo "Available files:"
+            ls -la sbom/
+            exit 1
           fi
         continue-on-error: false
       
@@ -97,8 +92,12 @@ jobs:
           echo "========================================="
           ls -lh sbom/
           echo ""
-          echo "Backend SBOM Components:"
-          jq '.components | length' sbom/backend-sbom.json || echo "Error reading backend SBOM"
+          echo "Backend SBOM:"
+          if [ -f sbom/backend-sbom.xml ]; then
+            echo "backend-sbom.xml created"
+          else
+            echo "Error: backend-sbom.xml missing"
+          fi
           echo ""
           echo "Frontend SBOM Components:"
           jq '.components | length' sbom/frontend-sbom.json || echo "Error reading frontend SBOM"
@@ -110,7 +109,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: backend-sbom
-          path: sbom/backend-sbom.json
+          path: sbom/backend-sbom.xml
           retention-days: 90
       
       - name: Upload Frontend SBOM
@@ -145,7 +144,7 @@ jobs:
             -F "autoCreate=true" \
             -F "projectName=Shop-Backend" \
             -F "projectVersion=1.0.0" \
-            -F "bom=@sbom/backend-sbom.json"
+            -F "bom=@sbom/backend-sbom.xml"
       
       - name: Upload Frontend SBOM to Dependency-Track
         if: false  # Auf 'true' setzen zum Aktivieren
@@ -174,11 +173,10 @@ jobs:
           echo "| Component | SBOM File | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-----------|-----------|--------|" >> $GITHUB_STEP_SUMMARY
           
-          if [ -f sbom/backend-sbom.json ]; then
-            BACKEND_COMPONENTS=$(jq '.components | length' sbom/backend-sbom.json)
-            echo "| Backend (.NET) | backend-sbom.json | ✅ $BACKEND_COMPONENTS components |" >> $GITHUB_STEP_SUMMARY
+          if [ -f sbom/backend-sbom.xml ]; then
+            echo "| Backend (.NET) | backend-sbom.xml | ✅ created |" >> $GITHUB_STEP_SUMMARY
           else
-            echo "| Backend (.NET) | backend-sbom.json | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+            echo "| Backend (.NET) | backend-sbom.xml | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
           fi
           
           if [ -f sbom/frontend-sbom.json ]; then
