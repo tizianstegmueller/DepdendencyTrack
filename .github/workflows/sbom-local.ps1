@@ -62,7 +62,7 @@ $backendProject = Join-Path $rootPath "Shop\Backend\ShopAPI.csproj"
 Write-Host "→ Generiere Backend SBOM..." -ForegroundColor Yellow
 Set-Location $rootPath
 
-dotnet CycloneDX $backendProject -o $sbomPath -j
+dotnet CycloneDX $backendProject -o $sbomPath
 
 # Umbenennen von bom.json zu backend-sbom.json
 $bomFile = Join-Path $sbomPath "bom.json"

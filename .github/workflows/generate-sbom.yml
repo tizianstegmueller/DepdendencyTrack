@@ -36,7 +36,7 @@ jobs:
       - name: Generate Backend SBOM
         run: |
           mkdir -p sbom
-          dotnet CycloneDX Shop/Backend/ShopAPI.csproj -o ./sbom -j
+          dotnet CycloneDX Shop/Backend/ShopAPI.csproj -o ./sbom
           # Rename to backend-sbom.json
           if [ -f sbom/bom.json ]; then
             mv sbom/bom.json sbom/backend-sbom.json
