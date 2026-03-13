@@ -19,7 +19,7 @@ on:
 
 env:
   AZURE_RESOURCE_GROUP: 'rg-dependency-track'
-  CONTAINER_REGISTRY: 'dependencytrackregistry'
+  CONTAINER_REGISTRY: 'okdependencytrackregistry'
   API_SERVER_APP_NAME: 'ok-dependencytrack-apiserver'
   FRONTEND_APP_NAME: 'ok-dependencytrack-frontend'
 
