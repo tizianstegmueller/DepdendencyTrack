@@ -20,8 +20,8 @@ on:
 env:
   AZURE_RESOURCE_GROUP: 'rg-dependency-track'
   CONTAINER_REGISTRY: 'dependencytrackregistry'
-  API_SERVER_APP_NAME: 'dependencytrack-apiserver'
-  FRONTEND_APP_NAME: 'dependencytrack-frontend'
+  API_SERVER_APP_NAME: 'dependencytrackapiserver'
+  FRONTEND_APP_NAME: 'dependencytrackfrontend'
 
 jobs:
   update-images:
