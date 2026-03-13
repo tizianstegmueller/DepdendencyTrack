@@ -1,0 +1,11 @@
+bin/
+obj/
+*.user
+*.suo
+.vs/
+.vscode/
+*.log
+.DS_Store
+Properties/
+README.md
+*.md

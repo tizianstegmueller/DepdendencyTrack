@@ -1,0 +1,10 @@
+using './main.bicep'
+
+param containerRegistryName = 'dependencytrackregistry'
+param storageAccountName = 'dtrackstorageacct'
+param location = 'germanywestcentral'
+param environmentName = 'dependencytrack-env'
+param apiServerAppName = 'dependencytrack-apiserver'
+param frontendAppName = 'dependencytrack-frontend'
+param apiServerImage = 'dependencytrack/apiserver:latest'
+param frontendImage = 'dependencytrack/frontend:latest'

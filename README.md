@@ -20,10 +20,18 @@ DepdendencyTrack/
 │   ├── SBOM-README.md              # SBOM Pipeline-Dokumentation
 │   └── SBOM-QUICKSTART.md          # SBOM Quick-Start
 │
+├── infrastructure/                 # Azure Infrastructure (Bicep)
+│   ├── main.bicep                  # Dependency-Track auf Container Apps
+│   ├── main.bicepparam             # Deployment-Parameter
+│   └── README.md                   # Infrastructure-Dokumentation
+│
 ├── .github/workflows/              # CI/CD Pipelines
+│   ├── infrastructure.yml          # Azure Infrastructure Deployment
+│   ├── deploy.yml                  # Update Dependency-Track
 │   ├── generate-sbom.yml           # GitHub Actions SBOM Pipeline
 │   └── sbom-local.ps1              # Lokales SBOM-Script
 │
+├── DEPLOYMENT.md                   # Azure Deployment Guide
 └── README.md                       # Diese Datei
 ```
 
@@ -50,7 +58,43 @@ npm run dev
 
 ---
 
-### 2. Dependency-Track starten
+### 2. Azure Deployment (Production)
+
+Dependency-Track auf Azure Container Apps deployen:
+
+#### Voraussetzungen
+```bash
+# Azure CLI installiert
+az --version
+
+# Service Principal erstellen
+az ad sp create-for-rbac --name "github-actions-dependency-track" \
+  --role contributor \
+  --scopes /subscriptions/<SUBSCRIPTION_ID> \
+  --sdk-auth
+```
+
+#### GitHub Secrets konfigurieren
+- `AZURE_CLIENT_ID`
+- `AZURE_TENANT_ID`
+- `AZURE_SUBSCRIPTION_ID`
+
+#### Deployment ausführen
+1. GitHub Actions → "Deploy Dependency-Track Infrastructure" → Run workflow
+2. Warten (ca. 5-10 Minuten)
+3. URLs werden in den Workflow-Logs angezeigt
+
+**Enthält**:
+- Azure Storage Account (persistente Daten)
+- Container Apps (API Server + Frontend)
+- Log Analytics
+- Auto-Scaling
+
+📖 Vollständige Anleitung: [DEPLOYMENT.md](DEPLOYMENT.md)
+
+---
+
+### 3. Dependency-Track lokal starten
 
 OWASP Dependency-Track für Schwachstellenanalyse:
 
@@ -66,7 +110,7 @@ Nach 2-3 Minuten öffnen Sie: http://localhost:8080
 
 ---
 
-### 3. SBOM generieren und analysieren
+### 4. SBOM generieren und analysieren
 
 Software Bill of Materials (SBOM) für die Shop-Anwendung erstellen:
 

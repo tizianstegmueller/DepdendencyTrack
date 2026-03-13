@@ -1,0 +1,65 @@
+name: Deploy Dependency-Track Infrastructure
+
+on:
+  workflow_dispatch:
+
+env:
+  AZURE_RESOURCE_GROUP: 'rg-dependency-track'
+  LOCATION: 'germanywestcentral'
+
+jobs:
+  deploy-infrastructure:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Create Resource Group
+        run: |
+          az group create \
+            --name ${{ env.AZURE_RESOURCE_GROUP }} \
+            --location ${{ env.LOCATION }}
+
+      - name: Deploy Bicep Template
+        run: |
+          az deployment group create \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --template-file ./infrastructure/main.bicep \
+            --parameters ./infrastructure/main.bicepparam \
+            --verbose
+
+      - name: Get Deployment Outputs
+        id: outputs
+        run: |
+          API_URL=$(az deployment group show \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --name main \
+            --query properties.outputs.apiServerUrl.value \
+            --output tsv)
+          
+          FRONTEND_URL=$(az deployment group show \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --name main \
+            --query properties.outputs.frontendUrl.value \
+            --output tsv)
+          
+          echo "API Server URL: $API_URL"
+          echo "Frontend URL: $FRONTEND_URL"
+          echo ""
+          echo "✅ Dependency-Track wurde erfolgreich deployt!"
+          echo "🌐 Frontend: $FRONTEND_URL"
+          echo "🔌 API: $API_URL"
+          echo ""
+          echo "📝 Standard-Login: admin / admin"
+          echo "⚠️  WICHTIG: Passwort nach erstem Login ändern!"

@@ -1,0 +1,132 @@
+name: Update Dependency-Track
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'infrastructure/**'
+  workflow_dispatch:
+    inputs:
+      apiServerTag:
+        description: 'API Server Image Tag (z.B. latest, 4.11.0)'
+        required: false
+        default: 'latest'
+      frontendTag:
+        description: 'Frontend Image Tag (z.B. latest, 4.11.0)'
+        required: false
+        default: 'latest'
+
+env:
+  AZURE_RESOURCE_GROUP: 'rg-dependency-track'
+  CONTAINER_REGISTRY: 'dependencytrackregistry'
+  API_SERVER_APP_NAME: 'dependencytrack-apiserver'
+  FRONTEND_APP_NAME: 'dependencytrack-frontend'
+
+jobs:
+  update-images:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Import Images to ACR (Optional)
+        continue-on-error: true
+        run: |
+          API_TAG=${{ github.event.inputs.apiServerTag || 'latest' }}
+          FRONTEND_TAG=${{ github.event.inputs.frontendTag || 'latest' }}
+          
+          echo "Importiere Images zu Azure Container Registry..."
+          
+          az acr import \
+            --name ${{ env.CONTAINER_REGISTRY }} \
+            --source docker.io/dependencytrack/apiserver:$API_TAG \
+            --image dependencytrack/apiserver:$API_TAG \
+            --force || echo "ACR Import übersprungen (optional)"
+          
+          az acr import \
+            --name ${{ env.CONTAINER_REGISTRY }} \
+            --source docker.io/dependencytrack/frontend:$FRONTEND_TAG \
+            --image dependencytrack/frontend:$FRONTEND_TAG \
+            --force || echo "ACR Import übersprungen (optional)"
+
+      - name: Update API Server Container App
+        run: |
+          API_TAG=${{ github.event.inputs.apiServerTag || 'latest' }}
+          
+          echo "Update API Server auf Version: $API_TAG"
+          
+          az containerapp update \
+            --name ${{ env.API_SERVER_APP_NAME }} \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --image dependencytrack/apiserver:$API_TAG
+
+      - name: Update Frontend Container App
+        run: |
+          FRONTEND_TAG=${{ github.event.inputs.frontendTag || 'latest' }}
+          
+          echo "Update Frontend auf Version: $FRONTEND_TAG"
+          
+          az containerapp update \
+            --name ${{ env.FRONTEND_APP_NAME }} \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --image dependencytrack/frontend:$FRONTEND_TAG
+
+      - name: Get Application URLs
+        run: |
+          API_URL=$(az containerapp show \
+            --name ${{ env.API_SERVER_APP_NAME }} \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --query properties.configuration.ingress.fqdn \
+            --output tsv)
+          
+          FRONTEND_URL=$(az containerapp show \
+            --name ${{ env.FRONTEND_APP_NAME }} \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --query properties.configuration.ingress.fqdn \
+            --output tsv)
+          
+          echo ""
+          echo "✅ Dependency-Track wurde aktualisiert!"
+          echo "🌐 Frontend: https://$FRONTEND_URL"
+          echo "🔌 API: https://$API_URL"
+          echo ""
+          echo "⏳ Bitte ca. 2-3 Minuten warten bis die Services vollständig gestartet sind."
+
+  redeploy-infrastructure:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+      id-token: write
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Update Infrastructure
+        run: |
+          az deployment group create \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --template-file ./infrastructure/main.bicep \
+            --parameters ./infrastructure/main.bicepparam \
+            --mode Incremental \
+            --verbose
