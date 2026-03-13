@@ -38,6 +38,12 @@ param postgresAdminPassword string
 @description('Location für PostgreSQL (muss PostgreSQL Flexible Server unterstützen)')
 param postgresLocation string = 'westeurope'
 
+@description('Entra ID Application (Client) ID für OIDC')
+param oidcClientId string
+
+@description('Entra ID Directory (Tenant) ID für OIDC')
+param oidcTenantId string
+
 @description('Tags für alle Ressourcen')
 param tags object = {
   environment: 'production'
@@ -221,12 +227,40 @@ resource apiServerApp 'Microsoft.App/containerApps@2024-03-01' = {
               name: 'ALPINE_DATABASE_POOL_MIN_IDLE'
               value: '10'
             }
+            {
+              name: 'ALPINE_OIDC_ENABLED'
+              value: 'true'
+            }
+            {
+              name: 'ALPINE_OIDC_CLIENT_ID'
+              value: oidcClientId
+            }
+            {
+              name: 'ALPINE_OIDC_ISSUER'
+              value: 'https://login.microsoftonline.com/${oidcTenantId}/v2.0'
+            }
+            {
+              name: 'ALPINE_OIDC_USERNAME_CLAIM'
+              value: 'preferred_username'
+            }
+            {
+              name: 'ALPINE_OIDC_USER_PROVISIONING'
+              value: 'true'
+            }
+            {
+              name: 'ALPINE_OIDC_TEAMS_CLAIM'
+              value: 'groups'
+            }
+            {
+              name: 'ALPINE_OIDC_TEAM_SYNCHRONIZATION'
+              value: 'true'
+            }
           ]
         }
       ]
       scale: {
         minReplicas: 1
-        maxReplicas: 2
+        maxReplicas: 1
       }
     }
   }
@@ -261,12 +295,20 @@ resource frontendApp 'Microsoft.App/containerApps@2024-03-01' = {
               name: 'API_BASE_URL'
               value: 'https://${apiServerApp.properties.configuration.ingress.fqdn}'
             }
+            {
+              name: 'OIDC_ISSUER'
+              value: 'https://login.microsoftonline.com/${oidcTenantId}/v2.0'
+            }
+            {
+              name: 'OIDC_CLIENT_ID'
+              value: oidcClientId
+            }
           ]
         }
       ]
       scale: {
         minReplicas: 1
-        maxReplicas: 3
+        maxReplicas: 1
         rules: [
           {
             name: 'http-scaling'
