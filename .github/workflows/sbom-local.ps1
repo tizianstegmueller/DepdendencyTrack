@@ -178,8 +178,8 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "Dependency-Track Upload" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 
-$dependencyTrackUrl = if ($env:DTRACK_URL) { $env:DTRACK_URL.TrimEnd('/') } else { "http://localhost:8081" }
-$dependencyTrackApiKey = "odt_gtZWN1RP_djZkrWdl0ukPlRZi1rrGjH1gKNnKmCLE"
+$dependencyTrackUrl = "https://dependencytrackapiserver.livelyocean-0836a65d.germanywestcentral.azurecontainerapps.io"
+$dependencyTrackApiKey = "odt_nfxKfZ0K_pWrhXUA0Zl8YHr4wDjBuGsbYljU0pmA2"
 $projectVersion = if ($env:DTRACK_PROJECT_VERSION) { $env:DTRACK_PROJECT_VERSION } else { "1.0.0" }
 $backendProjectName = if ($env:DTRACK_BACKEND_PROJECT_NAME) { $env:DTRACK_BACKEND_PROJECT_NAME } else { "Shop-Backend" }
 $frontendProjectName = if ($env:DTRACK_FRONTEND_PROJECT_NAME) { $env:DTRACK_FRONTEND_PROJECT_NAME } else { "Shop-Frontend" }
@@ -207,20 +207,36 @@ function Upload-SbomToDependencyTrack {
             projectName = $ProjectName
             projectVersion = $ProjectVersion
             bom = $bomBase64
-        } | ConvertTo-Json -Depth 5
+        } | ConvertTo-Json -Depth 5 -Compress
 
-        $headers = @{
-            "X-Api-Key" = $ApiKey
-        }
+        # Temporäre Datei für den Payload erstellen
+        $tempFile = [System.IO.Path]::GetTempFileName()
+        $payload | Out-File -FilePath $tempFile -Encoding utf8 -NoNewline
 
-        $response = Invoke-RestMethod -Method Put -Uri "$DependencyTrackUrl/api/v1/bom" -Headers $headers -ContentType "application/json" -Body $payload
+        # curl verwenden (funktioniert besser mit Azure Container Apps als Invoke-RestMethod)
+        $curlArgs = @(
+            '-k'  # SSL-Zertifikat nicht validieren
+            '-X', 'PUT'
+            '-H', "X-Api-Key: $ApiKey"
+            '-H', 'Content-Type: application/json'
+            '-d', "@$tempFile"
+            "$DependencyTrackUrl/api/v1/bom"
+        )
 
-        if ($response.token) {
-            Write-Host "Upload erfolgreich fuer '$ProjectName' (Token: $($response.token))" -ForegroundColor Green
-        } else {
+        $response = & curl.exe $curlArgs 2>&1
+
+        # Temporäre Datei löschen
+        Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
+
+        # Prüfen ob Upload erfolgreich war
+        if ($LASTEXITCODE -eq 0) {
             Write-Host "Upload erfolgreich fuer '$ProjectName'" -ForegroundColor Green
+            return $true
+        } else {
+            Write-Host "Upload fehlgeschlagen fuer '$ProjectName'" -ForegroundColor Red
+            Write-Host "Fehlerdetails: $response" -ForegroundColor Gray
+            return $false
         }
-        return $true
     }
     catch {
         Write-Host "Upload fehlgeschlagen fuer '$ProjectName': $($_.Exception.Message)" -ForegroundColor Red

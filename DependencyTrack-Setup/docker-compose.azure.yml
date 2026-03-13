@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  dtrack-apiserver:
+    image: dependencytrack/apiserver:latest
+    environment:
+      - SYSTEM_REQUIREMENT_CHECK_ENABLED=true
+      - LOGGING_LEVEL=INFO
+      - JAVA_OPTS="-Xmx4G"
+
+    restart: unless-stopped
+
+  dtrack-frontend:
+    image: dependencytrackregistryok.azurecr.io/dependencytrack/frontend:latest
+    depends_on:
+      - dtrack-apiserver
+    environment:
+      - API_BASE_URL=https://dependencytrackapiserver.livelyocean-0836a65d.germanywestcentral.azurecontainerapps.io
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
