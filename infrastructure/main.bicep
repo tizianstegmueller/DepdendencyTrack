@@ -36,7 +36,7 @@ param postgresAdminUser string = 'dtrackadmin'
 param postgresAdminPassword string
 
 @description('Location für PostgreSQL (muss PostgreSQL Flexible Server unterstützen)')
-param postgresLocation string = 'westeurope'
+param postgresLocation string = 'northeurope'
 
 @description('Entra ID Application (Client) ID für OIDC')
 param oidcClientId string
