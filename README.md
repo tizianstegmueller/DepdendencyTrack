@@ -70,14 +70,25 @@ az --version
 # Service Principal erstellen
 az ad sp create-for-rbac --name "github-actions-dependency-track" \
   --role contributor \
-  --scopes /subscriptions/<SUBSCRIPTION_ID> \
-  --sdk-auth
+  --scopes /subscriptions/<SUBSCRIPTION_ID>
+
+# Notieren Sie: appId, tenant (aus der Ausgabe)
+
+# Federated Credential für GitHub hinzufügen
+az ad app federated-credential create \
+  --id <APP_ID> \
+  --parameters '{
+    "name": "github-actions-deploy",
+    "issuer": "https://token.actions.githubusercontent.com",
+    "subject": "repo:<GITHUB_USER>/<REPO_NAME>:ref:refs/heads/main",
+    "audiences": ["api://AzureADTokenExchange"]
+  }'
 ```
 
 #### GitHub Secrets konfigurieren
-- `AZURE_CLIENT_ID`
-- `AZURE_TENANT_ID`
-- `AZURE_SUBSCRIPTION_ID`
+- `AZURE_CLIENT_ID` - appId aus Service Principal
+- `AZURE_TENANT_ID` - tenant aus Service Principal
+- `AZURE_SUBSCRIPTION_ID` - Ihre Subscription ID
 
 #### Deployment ausführen
 1. GitHub Actions → "Deploy Dependency-Track Infrastructure" → Run workflow

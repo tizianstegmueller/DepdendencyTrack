@@ -20,18 +20,55 @@ Dieses Projekt enthält die Infrastruktur und Deployment-Pipelines für [OWASP D
 
 ### Voraussetzungen
 
-1. **Azure Service Principal erstellen**:
+1. **Azure Service Principal mit Federated Credentials erstellen**:
+
    ```bash
-   az ad sp create-for-rbac --name "github-actions-dependency-track" \
+   # Variablen setzen
+   SUBSCRIPTION_ID="<IHRE_SUBSCRIPTION_ID>"
+   RESOURCE_GROUP="rg-dependency-track"
+   APP_NAME="github-actions-dependency-track"
+   
+   # Service Principal erstellen
+   az ad sp create-for-rbac --name "$APP_NAME" \
      --role contributor \
-     --scopes /subscriptions/<SUBSCRIPTION_ID> \
-     --sdk-auth
+     --scopes /subscriptions/$SUBSCRIPTION_ID
+   
+   # Ausgabe notieren:
+   # - appId (wird zu AZURE_CLIENT_ID)
+   # - tenant (wird zu AZURE_TENANT_ID)
    ```
 
-2. **GitHub Secrets konfigurieren**:
-   - `AZURE_CLIENT_ID` - Client ID des Service Principal
-   - `AZURE_TENANT_ID` - Azure Tenant ID
-   - `AZURE_SUBSCRIPTION_ID` - Azure Subscription ID
+2. **Federated Credential für GitHub Actions hinzufügen**:
+
+   ```bash
+   # App ID vom vorherigen Schritt verwenden
+   APP_ID="<APP_ID_AUS_VORHERIGEM_SCHRITT>"
+   GITHUB_ORG="<IHR_GITHUB_USERNAME_ODER_ORG>"
+   GITHUB_REPO="<IHR_REPO_NAME>"
+   
+   az ad app federated-credential create \
+     --id $APP_ID \
+     --parameters '{
+       "name": "github-actions-deploy",
+       "issuer": "https://token.actions.githubusercontent.com",
+       "subject": "repo:'"$GITHUB_ORG"'/'"$GITHUB_REPO"':ref:refs/heads/main",
+       "audiences": ["api://AzureADTokenExchange"]
+     }'
+   ```
+
+3. **GitHub Secrets konfigurieren**:
+
+   Gehe zu GitHub Repository → Settings → Secrets and variables → Actions → New repository secret
+   
+   - `AZURE_CLIENT_ID` - Die `appId` aus Schritt 1
+   - `AZURE_TENANT_ID` - Die `tenant` aus Schritt 1
+   - `AZURE_SUBSCRIPTION_ID` - Ihre Azure Subscription ID
+
+   ```bash
+   # IDs anzeigen falls vergessen:
+   az account show --query "{subscriptionId:id, tenantId:tenantId}"
+   az ad sp list --display-name "$APP_NAME" --query "[].{appId:appId}"
+   ```
 
 ### Schritt 1: Infrastruktur deployen
 
