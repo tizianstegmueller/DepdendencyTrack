@@ -4,16 +4,12 @@ Dieses Verzeichnis enthält die Azure Bicep Templates für das Deployment von De
 
 ## 📦 Enthaltene Ressourcen
 
-### Storage
-- **Storage Account**: Für persistente Daten
-- **File Share**: `dependencytrackdata` (50 GB) - gemountet auf `/data` im API Server
-
 ### Container Apps
 - **Environment**: Mit Log Analytics Integration
 - **API Server App**: 
   - Image: `dependencytrack/apiserver:latest`
   - Resources: 2 CPU, 4 GB RAM
-  - Persistent Storage Mount
+  - ⚠️ **KEINE PERSISTENZ** - Daten gehen bei Neustarts verloren
   - CORS aktiviert
 - **Frontend App**:
   - Image: `dependencytrack/frontend:latest`
@@ -23,6 +19,8 @@ Dieses Verzeichnis enthält die Azure Bicep Templates für das Deployment von De
 ### Optional
 - **Container Registry**: Für Mirror der Docker Hub Images
 
+⚠️ **Hinweis**: Aktuell **keine persistente Datenspeicherung** konfiguriert. Alle Daten (SBOMs, Projekte, Benutzer) gehen bei Container-Neustarts verloren. Nur für Tests/Demo geeignet!
+
 ## 🚀 Quick Start
 
 ### 1. Parameter anpassen
@@ -31,7 +29,6 @@ Bearbeite `main.bicepparam`:
 
 ```bicep
 param containerRegistryName = 'deinuniquerregistryname'  // 3-50 alphanumerische Zeichen
-param storageAccountName = 'deinuniquestoragename'       // 3-24 Kleinbuchstaben/Zahlen
 ```
 
 ### 2. Deployment ausführen
@@ -68,7 +65,6 @@ az deployment group show \
 | Parameter | Beschreibung | Standard | Erforderlich |
 |-----------|--------------|----------|--------------|
 | `containerRegistryName` | Name der Azure Container Registry | - | Ja |
-| `storageAccountName` | Name des Storage Accounts | - | Ja |
 | `location` | Azure Region | Von Resource Group | Nein |
 | `environmentName` | Container Apps Environment Name | `dependencytrack-env` | Nein |
 | `apiServerAppName` | API Server Container App Name | `dependencytrack-apiserver` | Nein |
@@ -108,7 +104,6 @@ az containerapp update \
 
 Das Template gibt folgende Werte zurück:
 
-- `storageAccountName`: Name des Storage Accounts
 - `containerRegistryName`: Name der Container Registry (falls erstellt)
 - `containerRegistryLoginServer`: Login Server der Registry
 - `apiServerUrl`: HTTPS URL des API Servers

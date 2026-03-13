@@ -6,7 +6,7 @@ Dieses Projekt enthält die Infrastruktur und Deployment-Pipelines für [OWASP D
 
 ```
 ├── infrastructure/
-│   ├── main.bicep          # Hauptinfrastruktur (Storage, Container Apps)
+│   ├── main.bicep          # Hauptinfrastruktur (PostgreSQL, Container Apps)
 │   └── main.bicepparam     # Parameter für Bicep-Deployment
 ├── .github/workflows/
 │   ├── infrastructure.yml  # Pipeline für Infrastruktur-Deployment
@@ -56,13 +56,14 @@ Dieses Projekt enthält die Infrastruktur und Deployment-Pipelines für [OWASP D
      }'
    ```
 
-3. **GitHub Secrets konfigurieren**:
+2. **GitHub Secrets konfigurieren**:
 
    Gehe zu GitHub Repository → Settings → Secrets and variables → Actions → New repository secret
    
    - `AZURE_CLIENT_ID` - Die `appId` aus Schritt 1
    - `AZURE_TENANT_ID` - Die `tenant` aus Schritt 1
    - `AZURE_SUBSCRIPTION_ID` - Ihre Azure Subscription ID
+   - `POSTGRES_PASSWORD` - Sicheres Passwort für die PostgreSQL Datenbank
 
    ```bash
    # IDs anzeigen falls vergessen:
@@ -77,10 +78,10 @@ Dieses Projekt enthält die Infrastruktur und Deployment-Pipelines für [OWASP D
 3. Warte bis das Deployment abgeschlossen ist (ca. 5-10 Minuten)
 
 Dies erstellt:
-- Azure Storage Account mit File Share (persistente Daten)
+- Azure Database for PostgreSQL Flexible Server (persistente Daten)
 - Azure Container Registry (optional, für Image-Mirror)
 - Container Apps Environment mit Log Analytics
-- API Server Container App (mit persistentem Storage)
+- API Server Container App (mit PostgreSQL-Anbindung)
 - Frontend Container App
 
 ### Schritt 2: Auf Dependency-Track zugreifen
@@ -105,35 +106,34 @@ Um auf eine neuere Version zu aktualisieren:
 ## 🏗️ Architektur
 
 ```
-┌─────────────────────────────────────────────┐
-│  Azure Storage Account                      │
-│  ┌──────────────────────────────────────┐  │
-│  │  File Share: dependencytrackdata     │  │
-│  │  - Persistent data storage           │  │
-│  │  - 50 GB Quota                        │  │
-│  └──────────────────────────────────────┘  │
-└─────────────────────────────────────────────┘
-                    │
-                    ▼
-┌─────────────────────────────────────────────┐
-│  Container Apps Environment                 │
-│  ┌────────────────────────────────────┐    │
-│  │  API Server Container App          │    │
-│  │  - dependencytrack/apiserver       │    │
-│  │  - Port 8080                       │    │
-│  │  - 2 CPU, 4 GB RAM                 │    │
-│  │  - Mounted Storage: /data          │    │
-│  │  - Auto-scaling (1-2 replicas)     │    │
-│  └────────────────────────────────────┘    │
-│                                             │
-│  ┌────────────────────────────────────┐    │
-│  │  Frontend Container App            │    │
-│  │  - dependencytrack/frontend        │    │
-│  │  - Port 8080                       │    │
-│  │  - 0.5 CPU, 1 GB RAM               │    │
-│  │  - Auto-scaling (1-3 replicas)     │    │
-│  └────────────────────────────────────┘    │
-└─────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│  Azure DB for PostgreSQL Flexible Server                │
+│  ┌──────────────────────────────────────────────────┐  │
+│  │  Database: dtrack                                │  │
+│  │  - PostgreSQL 16, Standard_B2s, 32 GB            │  │
+│  └──────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────┐
+│  Container Apps Environment                             │
+│  ┌────────────────────────────────────┐               │
+│  │  API Server Container App          │               │
+│  │  - dependencytrack/apiserver       │               │
+│  │  - Port 8080                       │               │
+│  │  - 2 CPU, 4 GB RAM                 │               │
+│  │  - PostgreSQL (extern)             │               │
+│  │  - Auto-scaling (1-2 replicas)     │               │
+│  └────────────────────────────────────┘               │
+│                                                         │
+│  ┌────────────────────────────────────┐               │
+│  │  Frontend Container App            │               │
+│  │  - dependencytrack/frontend        │               │
+│  │  - Port 8080                       │               │
+│  │  - 0.5 CPU, 1 GB RAM               │               │
+│  │  - Auto-scaling (1-3 replicas)     │               │
+│  └────────────────────────────────────┘               │
+└─────────────────────────────────────────────────────────┘
 ```
 
 ## 🔧 Lokale Entwicklung
@@ -152,17 +152,16 @@ Siehe [DependencyTrack-Setup/README.md](DependencyTrack-Setup/README.md) für De
 Bearbeite [infrastructure/main.bicepparam](infrastructure/main.bicepparam):
 
 ```bicep
-param containerRegistryName = 'deinregistryname'     // Muss global eindeutig sein (3-50 Zeichen)
-param storageAccountName = 'deinstoragename'         // Muss global eindeutig sein (3-24 Zeichen)
-param location = 'germanywestcentral'                // Azure Region
-param environmentName = 'dependencytrack-env'
-param apiServerAppName = 'dependencytrack-apiserver'
-param frontendAppName = 'dependencytrack-frontend'
+param containerRegistryName = 'deinregistryname'   // 3-50 alphanumerische Zeichen
+param postgresServerName    = 'dein-postgres-srv'  // Global eindeutig, Kleinbuchstaben/Zahlen/Bindestriche
+param postgresDatabaseName  = 'dtrack'             // Datenbankname
+param postgresAdminUser     = 'dtrackadmin'        // DB Admin Benutzername
+// postgresAdminPassword → GitHub Secret POSTGRES_PASSWORD
 ```
 
-**Wichtig**: 
-- Container Registry Name: 3-50 alphanumerische Zeichen
-- Storage Account Name: 3-24 Kleinbuchstaben und Zahlen
+**Wichtig**:
+- PostgreSQL Server Name: global eindeutig, 3-63 Zeichen (Kleinbuchstaben, Zahlen, Bindestriche)
+- Container Registry Name: 3-50 alphanumerische Zeichen (nur Kleinbuchstaben und Zahlen)
 
 ## 🌐 URLs nach Deployment
 
@@ -193,7 +192,8 @@ az group create --name rg-dependency-track --location germanywestcentral
 az deployment group create \
   --resource-group rg-dependency-track \
   --template-file infrastructure/main.bicep \
-  --parameters infrastructure/main.bicepparam
+  --parameters infrastructure/main.bicepparam \
+  --parameters postgresAdminPassword="<SICHERES_PASSWORT>"
 ```
 
 ### Container Apps manuell aktualisieren
@@ -248,29 +248,40 @@ Alle Logs werden im Log Analytics Workspace `dependencytrack-env-logs` gespeiche
 
 ## 💾 Datenpersistenz
 
-Die Dependency-Track Daten werden persistent in einem Azure File Share gespeichert:
-- **Storage Account**: `dtrackstorageacct`
-- **File Share**: `dependencytrackdata`
-- **Mount Path**: `/data` (im API Server Container)
-- **Quota**: 50 GB
+Alle Dependency-Track Daten werden in **Azure Database for PostgreSQL Flexible Server** gespeichert:
 
-### Backup der Daten
+- **Server**: `ok-dtrack-postgres.postgres.database.azure.com`
+- **Datenbank**: `dtrack`
+- **Version**: PostgreSQL 16
+- **SKU**: Standard_B2s (Burstable, 2 vCores)
+- **Storage**: 32 GB
+- **Backup**: 7 Tage automatisch
+- **SSL**: Erforderlich (`sslmode=require`)
+
+Die Verbindungsdaten werden als **Container App Secrets** gespeichert (kein Klartext im Code).
+
+### PostgreSQL-Verbindung testen
 ```bash
-# File Share Inhalt herunterladen
-az storage file download-batch \
-  --account-name dtrackstorageacct \
-  --source dependencytrackdata \
-  --destination ./backup
+# FQDN des Servers abrufen
+az deployment group show \
+  --resource-group rg-dependency-track \
+  --name main \
+  --query properties.outputs.postgresServerFqdn.value
+
+# Verbindung testen (falls psql installiert)
+psql "host=ok-dtrack-postgres.postgres.database.azure.com dbname=dtrack user=dtrackadmin sslmode=require"
 ```
 
 ## 🔒 Sicherheit
 
 - ✅ HTTPS automatisch für Container Apps Ingress
-- ✅ Persistent Storage mit Azure Files (SMB)
+- ✅ PostgreSQL mit SSL-Pflicht (`sslmode=require`)
+- ✅ DB-Passwort als GitHub Secret (nie im Code)
+- ✅ DB-Passwort als Container App Secret (kein Klartext in der App)
 - ✅ Log Analytics für Monitoring
 - ✅ CORS aktiviert für API Server
 - ⚠️ Admin-User Passwort nach erstem Login ändern
-- 💡 Empfehlung: Managed Identity für erweiterte Sicherheit
+- 💡 Empfehlung: Managed Identity für DB-Zugriff verwenden
 
 ## 🔄 SBOM Upload Integration
 
@@ -328,17 +339,19 @@ az containerapp logs show \
   --tail 100
 ```
 
-### Storage Mount Issues
+### Daten nach PostgreSQL-Fehler prüfen
 ```bash
-# Prüfe Storage Account Verbindung
-az storage account show \
-  --name dtrackstorageacct \
-  --resource-group rg-dependency-track
+# DB-Verbindung aus Logs prüfen
+az containerapp logs show \
+  --name dependencytrack-apiserver \
+  --resource-group rg-dependency-track \
+  --tail 50
 
-# Prüfe File Share
-az storage share show \
-  --name dependencytrackdata \
-  --account-name dtrackstorageacct
+# Sicherstellen, dass PostgreSQL läuft
+az postgres flexible-server show \
+  --name ok-dtrack-postgres \
+  --resource-group rg-dependency-track \
+  --query state
 ```
 
 ### Slow Performance
@@ -349,12 +362,13 @@ az storage share show \
 ## 💡 Weitere Schritte
 
 - [ ] Custom Domain für Container Apps konfigurieren
-- [ ] Externe PostgreSQL Datenbank anbinden (bessere Performance)
+- [ ] PostgreSQL SKU auf Standard_D2s skalieren (für höhere Last)
+- [ ] PostgreSQL High Availability aktivieren (für Production)
 - [ ] Application Insights für erweiterte Metriken
-- [ ] Managed Identity statt Admin-User verwenden
+- [ ] Managed Identity für DB-Verbindung (statt Passwort)
 - [ ] Azure Key Vault für Secrets integrieren
 - [ ] Staging Environment hinzufügen
-- [ ] Automated Backup-Lösung implementieren
+- [ ] Point-in-Time Restore für PostgreSQL prüfen
 
 ## 📚 Weiterführende Links
 

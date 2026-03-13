@@ -96,10 +96,11 @@ az ad app federated-credential create \
 3. URLs werden in den Workflow-Logs angezeigt
 
 **Enthält**:
-- Azure Storage Account (persistente Daten)
+- Container Apps Environment
 - Container Apps (API Server + Frontend)
 - Log Analytics
 - Auto-Scaling
+- ⚠️ **Keine Persistenz** - nur für Tests geeignet
 
 📖 Vollständige Anleitung: [DEPLOYMENT.md](DEPLOYMENT.md)
 

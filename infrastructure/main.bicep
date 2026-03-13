@@ -22,8 +22,18 @@ param apiServerImage string = 'dependencytrack/apiserver:latest'
 @description('Frontend Container Image')
 param frontendImage string = 'dependencytrack/frontend:latest'
 
-@description('Storage Account Name für persistente Daten')
-param storageAccountName string
+@description('Name des PostgreSQL Flexible Servers')
+param postgresServerName string
+
+@description('Name der PostgreSQL Datenbank')
+param postgresDatabaseName string = 'dtrack'
+
+@description('PostgreSQL Administrator Benutzername')
+param postgresAdminUser string = 'dtrackadmin'
+
+@description('PostgreSQL Administrator Passwort')
+@secure()
+param postgresAdminPassword string
 
 @description('Tags für alle Ressourcen')
 param tags object = {
@@ -31,28 +41,53 @@ param tags object = {
   project: 'dependency-track'
 }
 
-// Storage Account für persistente Daten
-resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
-  name: storageAccountName
+// PostgreSQL Flexible Server
+resource postgresServer 'Microsoft.DBforPostgreSQL/flexibleServers@2023-06-01-preview' = {
+  name: postgresServerName
   location: location
   tags: tags
   sku: {
-    name: 'Standard_LRS'
+    name: 'Standard_B2s'
+    tier: 'Burstable'
   }
-  kind: 'StorageV2'
   properties: {
-    accessTier: 'Hot'
-    supportsHttpsTrafficOnly: true
-    minimumTlsVersion: 'TLS1_2'
+    administratorLogin: postgresAdminUser
+    administratorLoginPassword: postgresAdminPassword
+    version: '16'
+    storage: {
+      storageSizeGB: 32
+    }
+    backup: {
+      backupRetentionDays: 7
+      geoRedundantBackup: 'Disabled'
+    }
+    highAvailability: {
+      mode: 'Disabled'
+    }
+    authConfig: {
+      activeDirectoryAuth: 'Disabled'
+      passwordAuth: 'Enabled'
+    }
   }
 }
 
-// File Share für Dependency-Track Daten
-resource fileShare 'Microsoft.Storage/storageAccounts/fileServices/shares@2023-01-01' = {
-  name: '${storageAccount.name}/default/dependencytrackdata'
+// Firewall Rule: Azure Services erlauben
+resource postgresFirewallAzure 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2023-06-01-preview' = {
+  name: 'AllowAzureServices'
+  parent: postgresServer
   properties: {
-    shareQuota: 50
-    enabledProtocols: 'SMB'
+    startIpAddress: '0.0.0.0'
+    endIpAddress: '0.0.0.0'
+  }
+}
+
+// PostgreSQL Datenbank
+resource postgresDatabase 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2023-06-01-preview' = {
+  name: postgresDatabaseName
+  parent: postgresServer
+  properties: {
+    charset: 'UTF8'
+    collation: 'en_US.utf8'
   }
 }
 
@@ -99,23 +134,6 @@ resource environment 'Microsoft.App/managedEnvironments@2024-03-01' = {
   }
 }
 
-// Storage für Environment
-resource environmentStorage 'Microsoft.App/managedEnvironments/storages@2024-03-01' = {
-  name: 'dependencytrackdata'
-  parent: environment
-  properties: {
-    azureFile: {
-      accountName: storageAccount.name
-      accountKey: storageAccount.listKeys().keys[0].value
-      shareName: 'dependencytrackdata'
-      accessMode: 'ReadWrite'
-    }
-  }
-  dependsOn: [
-    fileShare
-  ]
-}
-
 // API Server Container App
 resource apiServerApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: apiServerAppName
@@ -135,6 +153,12 @@ resource apiServerApp 'Microsoft.App/containerApps@2024-03-01' = {
           allowedHeaders: ['*']
         }
       }
+      secrets: [
+        {
+          name: 'db-password'
+          value: postgresAdminPassword
+        }
+      ]
     }
     template: {
       containers: [
@@ -162,11 +186,37 @@ resource apiServerApp 'Microsoft.App/containerApps@2024-03-01' = {
               name: 'ALPINE_CORS_ALLOW_ORIGIN'
               value: '*'
             }
-          ]
-          volumeMounts: [
             {
-              volumeName: 'data'
-              mountPath: '/data'
+              name: 'ALPINE_DATABASE_MODE'
+              value: 'external'
+            }
+            {
+              name: 'ALPINE_DATABASE_URL'
+              value: 'jdbc:postgresql://${postgresServer.properties.fullyQualifiedDomainName}:5432/${postgresDatabaseName}?sslmode=require'
+            }
+            {
+              name: 'ALPINE_DATABASE_DRIVER'
+              value: 'org.postgresql.Driver'
+            }
+            {
+              name: 'ALPINE_DATABASE_USERNAME'
+              value: postgresAdminUser
+            }
+            {
+              name: 'ALPINE_DATABASE_PASSWORD'
+              secretRef: 'db-password'
+            }
+            {
+              name: 'ALPINE_DATABASE_POOL_ENABLED'
+              value: 'true'
+            }
+            {
+              name: 'ALPINE_DATABASE_POOL_MAX_SIZE'
+              value: '20'
+            }
+            {
+              name: 'ALPINE_DATABASE_POOL_MIN_IDLE'
+              value: '10'
             }
           ]
         }
@@ -175,18 +225,8 @@ resource apiServerApp 'Microsoft.App/containerApps@2024-03-01' = {
         minReplicas: 1
         maxReplicas: 2
       }
-      volumes: [
-        {
-          name: 'data'
-          storageType: 'AzureFile'
-          storageName: 'dependencytrackdata'
-        }
-      ]
     }
   }
-  dependsOn: [
-    environmentStorage
-  ]
 }
 
 // Frontend Container App
@@ -240,9 +280,10 @@ resource frontendApp 'Microsoft.App/containerApps@2024-03-01' = {
 }
 
 // Outputs
-output storageAccountName string = storageAccount.name
 output containerRegistryName string = !empty(containerRegistryName) ? containerRegistryName : ''
 output containerRegistryLoginServer string = !empty(containerRegistryName) ? '${containerRegistryName}.azurecr.io' : ''
+output postgresServerFqdn string = postgresServer.properties.fullyQualifiedDomainName
+output postgresDatabaseName string = postgresDatabaseName
 output apiServerUrl string = 'https://${apiServerApp.properties.configuration.ingress.fqdn}'
 output frontendUrl string = 'https://${frontendApp.properties.configuration.ingress.fqdn}'
 output environmentId string = environment.id

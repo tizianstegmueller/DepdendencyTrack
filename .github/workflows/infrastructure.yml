@@ -37,6 +37,7 @@ jobs:
             --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
             --template-file ./infrastructure/main.bicep \
             --parameters ./infrastructure/main.bicepparam \
+            --parameters postgresAdminPassword="${{ secrets.POSTGRES_PASSWORD }}" \
             --verbose
 
       - name: Get Deployment Outputs
@@ -54,12 +55,20 @@ jobs:
             --query properties.outputs.frontendUrl.value \
             --output tsv)
           
+          POSTGRES_FQDN=$(az deployment group show \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --name main \
+            --query properties.outputs.postgresServerFqdn.value \
+            --output tsv)
+          
           echo "API Server URL: $API_URL"
           echo "Frontend URL: $FRONTEND_URL"
+          echo "PostgreSQL Server: $POSTGRES_FQDN"
           echo ""
           echo "✅ Dependency-Track wurde erfolgreich deployt!"
           echo "🌐 Frontend: $FRONTEND_URL"
           echo "🔌 API: $API_URL"
+          echo "🐘 PostgreSQL: $POSTGRES_FQDN"
           echo ""
           echo "📝 Standard-Login: admin / admin"
           echo "⚠️  WICHTIG: Passwort nach erstem Login ändern!"
