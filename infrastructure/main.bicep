@@ -146,7 +146,7 @@ resource environment 'Microsoft.App/managedEnvironments@2024-03-01' = {
         workloadProfileType: 'Consumption'
       }
       {
-        name: 'dtrack-dedicated'
+        name: 'dtrack-d4'
         workloadProfileType: 'D4'
         minimumCount: 1
         maximumCount: 1
@@ -162,7 +162,7 @@ resource apiServerApp 'Microsoft.App/containerApps@2024-03-01' = {
   tags: tags
   properties: {
     managedEnvironmentId: environment.id
-    workloadProfileName: 'dtrack-dedicated'
+    workloadProfileName: 'dtrack-d4'
     configuration: {
       ingress: {
         external: true
