@@ -127,7 +127,7 @@ resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
   }
 }
 
-// Container Apps Environment mit Storage Mount
+// Container Apps Environment mit Workload Profiles
 resource environment 'Microsoft.App/managedEnvironments@2024-03-01' = {
   name: environmentName
   location: location
@@ -140,6 +140,18 @@ resource environment 'Microsoft.App/managedEnvironments@2024-03-01' = {
         sharedKey: logAnalytics.listKeys().primarySharedKey
       }
     }
+    workloadProfiles: [
+      {
+        name: 'Consumption'
+        workloadProfileType: 'Consumption'
+      }
+      {
+        name: 'dtrack-dedicated'
+        workloadProfileType: 'D4'
+        minimumCount: 1
+        maximumCount: 1
+      }
+    ]
   }
 }
 
@@ -150,6 +162,7 @@ resource apiServerApp 'Microsoft.App/containerApps@2024-03-01' = {
   tags: tags
   properties: {
     managedEnvironmentId: environment.id
+    workloadProfileName: 'dtrack-dedicated'
     configuration: {
       ingress: {
         external: true
@@ -237,7 +250,7 @@ resource apiServerApp 'Microsoft.App/containerApps@2024-03-01' = {
             }
             {
               name: 'ALPINE_OIDC_ISSUER'
-              value: 'https://login.microsoftonline.com/${oidcTenantId}/v2.0'
+              value: '${az.environment().authentication.loginEndpoint}${oidcTenantId}/v2.0'
             }
             {
               name: 'ALPINE_OIDC_USERNAME_CLAIM'
@@ -297,7 +310,7 @@ resource frontendApp 'Microsoft.App/containerApps@2024-03-01' = {
             }
             {
               name: 'OIDC_ISSUER'
-              value: 'https://login.microsoftonline.com/${oidcTenantId}/v2.0'
+              value: '${az.environment().authentication.loginEndpoint}${oidcTenantId}/v2.0'
             }
             {
               name: 'OIDC_CLIENT_ID'
