@@ -175,8 +175,8 @@ resource apiServerApp 'Microsoft.App/containerApps@2024-03-01' = {
           name: 'apiserver'
           image: apiServerImage
           resources: {
-            cpu: json('2.0')
-            memory: '4Gi'
+            cpu: json('2.5')
+            memory: '5Gi'
           }
           env: [
             {
