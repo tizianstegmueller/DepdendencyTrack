@@ -10,6 +10,6 @@ param frontendImage = 'dependencytrack/frontend:latest'
 param postgresServerName = 'ok-dtrack-postgres'
 param postgresDatabaseName = 'dtrack'
 param postgresAdminUser = 'dtrackadmin'
+param postgresLocation = 'westeurope'
+param postgresAdminPassword = '<your-secret-password>' // Replace with your actual password or use a secure method
 // postgresAdminPassword wird über GitHub Secret POSTGRES_PASSWORD übergeben (nicht hier speichern!)
-
-param postgresAdminPassword =  'test'

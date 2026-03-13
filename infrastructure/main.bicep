@@ -35,6 +35,9 @@ param postgresAdminUser string = 'dtrackadmin'
 @secure()
 param postgresAdminPassword string
 
+@description('Location für PostgreSQL (muss PostgreSQL Flexible Server unterstützen)')
+param postgresLocation string = 'westeurope'
+
 @description('Tags für alle Ressourcen')
 param tags object = {
   environment: 'production'
@@ -44,7 +47,7 @@ param tags object = {
 // PostgreSQL Flexible Server
 resource postgresServer 'Microsoft.DBforPostgreSQL/flexibleServers@2023-06-01-preview' = {
   name: postgresServerName
-  location: location
+  location: postgresLocation
   tags: tags
   sku: {
     name: 'Standard_B2s'
