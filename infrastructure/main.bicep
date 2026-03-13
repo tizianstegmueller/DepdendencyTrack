@@ -241,8 +241,8 @@ resource frontendApp 'Microsoft.App/containerApps@2024-03-01' = {
 
 // Outputs
 output storageAccountName string = storageAccount.name
-output containerRegistryName string = !empty(containerRegistryName) ? containerRegistry.name : ''
-output containerRegistryLoginServer string = !empty(containerRegistryName) ? containerRegistry.properties.loginServer : ''
+output containerRegistryName string = !empty(containerRegistryName) ? containerRegistryName : ''
+output containerRegistryLoginServer string = !empty(containerRegistryName) ? '${containerRegistryName}.azurecr.io' : ''
 output apiServerUrl string = 'https://${apiServerApp.properties.configuration.ingress.fqdn}'
 output frontendUrl string = 'https://${frontendApp.properties.configuration.ingress.fqdn}'
 output environmentId string = environment.id
